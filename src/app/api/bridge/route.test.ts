@@ -181,6 +181,24 @@ describe('POST /api/bridge', () => {
       expect(data.error).toBe('Unauthorized: Invalid Firebase token');
     });
 
+    it('should proceed if ENFORCE_AUTH is true and token is valid', async () => {
+      process.env.ENFORCE_AUTH = 'true';
+      mockGenerateContent.mockResolvedValue({ text: '{}' });
+      // verifyIdToken is already mocked to return { uid: 'mock_test_user' } globally
+
+      const req = new Request('http://localhost:3000/api/bridge', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer valid_token'
+        },
+        body: JSON.stringify({ text: 'Hello' }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(verifyIdToken).toHaveBeenCalledWith('valid_token');
+    });
+
     it('should proceed if ENFORCE_AUTH is false but header is provided (extracts uid)', async () => {
       process.env.ENFORCE_AUTH = 'false';
       mockGenerateContent.mockResolvedValue({ text: '{}' });
