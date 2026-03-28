@@ -621,6 +621,7 @@ export default function Home() {
                 />
                 {imageDataUrl ? (
                   // alt text intentionally generic — image content is unknown at render time
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={imageDataUrl}
                     alt="Uploaded image preview"

@@ -63,7 +63,7 @@ export async function translateToEnglish(text: string): Promise<{ translated: st
     return { 
        translated: translation, 
        // Fallback logic to grab detected language
-       originalLang: (metadata as any)?.data?.translations?.[0]?.detectedSourceLanguage || 'unknown' 
+       originalLang: (metadata as { data?: { translations?: { detectedSourceLanguage?: string }[] } })?.data?.translations?.[0]?.detectedSourceLanguage || 'unknown' 
     };
   } catch (error) {
     console.warn('[Google Services] Cloud Translate API failed (or credentials missing):', error);

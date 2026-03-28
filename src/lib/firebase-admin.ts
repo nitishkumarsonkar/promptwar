@@ -18,7 +18,7 @@ export async function verifyIdToken(token: string) {
   if (!admin.apps.length) return null;
   try {
      return await admin.auth().verifyIdToken(token);
-  } catch (err) {
+  } catch {
      return null;
   }
 }
