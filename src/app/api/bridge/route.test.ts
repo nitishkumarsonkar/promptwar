@@ -5,7 +5,7 @@ import { db, verifyIdToken } from '../../../lib/firebase-admin';
 import { enrichLocationData, translateToEnglish } from '../../../lib/google-services';
 
 vi.mock('./agents', async (importOriginal) => {
-  const actual = await importOriginal<any>();
+  const actual = await importOriginal<typeof import('./agents')>();
   return {
     ...actual,
     getAi: vi.fn(),
@@ -35,11 +35,11 @@ describe('POST /api/bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGenerateContent = vi.fn();
-    (getAi as any).mockReturnValue({
+    vi.mocked(getAi).mockReturnValue({
       models: {
-        generateContent: mockGenerateContent,
+        generateContent: mockGenerateContent as unknown,
       },
-    });
+    } as ReturnType<typeof getAi>);
   });
 
   it('should return 400 if user input is missing both text and image', async () => {
@@ -251,7 +251,7 @@ describe('POST /api/bridge', () => {
       // Force the mock to throw an error for this test
       vi.mocked(db!.collection).mockReturnValueOnce({
         add: vi.fn().mockRejectedValueOnce(new Error('Firestore error')),
-      } as any);
+      } as unknown as ReturnType<NonNullable<typeof db>['collection']>);
 
       const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
 

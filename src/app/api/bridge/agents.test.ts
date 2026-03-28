@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { buildContents, buildVerificationSystem, getAi } from './agents';
+import { buildContents, buildVerificationSystem, getAi, type EmergencyAgentOutput, type MedicalAgentOutput, type CivicAgentOutput, type MobilityAgentOutput } from './agents';
 
 describe('agents helper functions', () => {
   describe('getAi', () => {
@@ -56,10 +56,10 @@ describe('agents helper functions', () => {
 
   describe('buildVerificationSystem', () => {
     it('should embed domain agent outputs into system instruction string', () => {
-      const emergency: any = { emergency_detected: true };
-      const medical: any = { medical_situation_detected: false };
-      const civic: any = { civic_issue_detected: false };
-      const mobility: any = { mobility_issue_detected: true };
+      const emergency = { emergency_detected: true } as unknown as EmergencyAgentOutput;
+      const medical = { medical_situation_detected: false } as unknown as MedicalAgentOutput;
+      const civic = { civic_issue_detected: false } as unknown as CivicAgentOutput;
+      const mobility = { mobility_issue_detected: true } as unknown as MobilityAgentOutput;
 
       const system = buildVerificationSystem(emergency, medical, civic, mobility);
 
