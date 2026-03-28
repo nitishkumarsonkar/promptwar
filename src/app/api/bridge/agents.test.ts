@@ -1,7 +1,31 @@
-import { describe, it, expect, vi } from 'vitest';
-import { buildContents, buildVerificationSystem } from './agents';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { buildContents, buildVerificationSystem, getAi } from './agents';
 
 describe('agents helper functions', () => {
+  describe('getAi', () => {
+    let originalEnv: string | undefined;
+
+    beforeEach(() => {
+      originalEnv = process.env.GEMINI_API_KEY;
+    });
+
+    afterEach(() => {
+      // Restore previous environment state so we don't break subsequent tests
+      process.env.GEMINI_API_KEY = originalEnv;
+    });
+
+    it('should throw an error if GEMINI_API_KEY is not set', () => {
+      delete process.env.GEMINI_API_KEY;
+      expect(() => getAi()).toThrow(/GEMINI_API_KEY environment variable is not set/);
+    });
+
+    it('should return GoogleGenAI instance when GEMINI_API_KEY is set', () => {
+      process.env.GEMINI_API_KEY = 'mock_api_key';
+      const ai = getAi();
+      expect(ai).toBeDefined();
+    });
+  });
+
   describe('buildContents', () => {
     it('should build text prompt correctly without image', () => {
       const parts = buildContents('hello world');

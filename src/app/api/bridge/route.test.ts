@@ -10,6 +10,15 @@ vi.mock('./agents', async (importOriginal) => {
   };
 });
 
+// Mock database to simulate successful saves
+vi.mock('../../../lib/firebase-admin', () => ({
+  db: {
+    collection: vi.fn().mockReturnValue({
+      add: vi.fn().mockResolvedValue(true),
+    }),
+  },
+}));
+
 describe('POST /api/bridge', () => {
   let mockGenerateContent: ReturnType<typeof vi.fn>;
 
@@ -43,6 +52,39 @@ describe('POST /api/bridge', () => {
     expect(res.status).toBe(400);
     const data = await res.json();
     expect(data.error).toContain('exceeds the maximum allowed length');
+  });
+
+  it('should return 400 if mockContext is too long (edge case)', async () => {
+    const req = new Request('http://localhost:3000/api/bridge', {
+      method: 'POST',
+      body: JSON.stringify({ text: 'hello', mockContext: 'a'.repeat(501) }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('Context data exceeds the maximum allowed length of 500 characters.');
+  });
+
+  it('should return 400 if image payload is too large (edge case)', async () => {
+    const req = new Request('http://localhost:3000/api/bridge', {
+      method: 'POST',
+      body: JSON.stringify({ image: 'data:image/png;base64,' + 'a'.repeat(7_000_001) }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('Image data exceeds the maximum allowed size of ~5 MB.');
+  });
+
+  it('should return 400 if image payload does not match data:image (edge case)', async () => {
+    const req = new Request('http://localhost:3000/api/bridge', {
+      method: 'POST',
+      body: JSON.stringify({ image: 'data:video/mp4;base64,aaa' }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe('Image must be a valid Base64 image data URL (data:image/...)');
   });
 
   it('should parse body gracefully if invalid JSON is sent (edge case)', async () => {
