@@ -10,13 +10,21 @@ vi.mock('./agents', async (importOriginal) => {
   };
 });
 
-// Mock database to simulate successful saves
+// Mock database to simulate successful saves and Auth
 vi.mock('../../../lib/firebase-admin', () => ({
   db: {
     collection: vi.fn().mockReturnValue({
       add: vi.fn().mockResolvedValue(true),
     }),
   },
+  verifyIdToken: vi.fn().mockResolvedValue({ uid: 'mock_test_user' }),
+}));
+
+// Mock Google Services to prevent tests from hitting live REST APIs and taking too long
+vi.mock('../../../lib/google-services', () => ({
+  enrichLocationData: vi.fn().mockResolvedValue('Mock GPS Location Data'),
+  translateToEnglish: vi.fn().mockImplementation(async (text: string) => ({ translated: text, originalLang: 'en' })),
+  generateAudioSummary: vi.fn().mockResolvedValue('mock_base64_audio_string'),
 }));
 
 describe('POST /api/bridge', () => {
@@ -115,6 +123,7 @@ describe('POST /api/bridge', () => {
     const data = await res.json();
     expect(data.intent).toBe('Pothole report');
     expect(data.urgency_level).toBe('low');
+    expect(data.audio_summary).toBe('mock_base64_audio_string');
   });
 
   it('should handle unparseable response from AI gracefully', async () => {

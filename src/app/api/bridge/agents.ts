@@ -156,6 +156,7 @@ export interface VerificationAgentOutput {
     estimated_time_to_resolution: string;
   };
   human_readable_summary: string;
+  audio_summary?: string;
 }
 
 /** Unified response returned by the `/api/bridge` POST endpoint. */
@@ -181,6 +182,7 @@ export interface MultiAgentResponse {
     estimated_time_to_resolution: string;
   };
   human_readable_summary: string;
+  audio_summary?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -31,7 +31,8 @@ import {
   type VerificationAgentOutput,
   type MultiAgentResponse,
 } from './agents';
-import { db } from '../../../lib/firebase-admin';
+import { db, verifyIdToken } from '../../../lib/firebase-admin';
+import { enrichLocationData, translateToEnglish, generateAudioSummary } from '../../../lib/google-services';
 
 
 // ---------------------------------------------------------------------------
@@ -217,11 +218,49 @@ export async function POST(req: Request): Promise<Response> {
 
   const { text, image, mockContext } = body;
 
+  // ── Authentication Check ──────────────────────────────────────────────────
+  const authHeader = req.headers.get('Authorization');
+  let authUid = 'anonymous';
+
+  if (process.env.ENFORCE_AUTH === 'true') {
+     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return Response.json({ error: 'Missing or invalid Authorization header' }, { status: 401 });
+     }
+     const token = authHeader.split('Bearer ')[1];
+     const decoded = await verifyIdToken(token);
+     if (!decoded) {
+        return Response.json({ error: 'Unauthorized: Invalid Firebase token' }, { status: 401 });
+     }
+     authUid = decoded.uid;
+  } else if (authHeader && authHeader.startsWith('Bearer ')) {
+     const decoded = await verifyIdToken(authHeader.split('Bearer ')[1]);
+     if (decoded) authUid = decoded.uid;
+  }
+
+  // ── Phase 0: Pre-processing (Maps & Translation) ───────────────────────────
+  let finalUserText = text || '';
+  let finalContext = mockContext || '';
+
+  if (finalUserText) {
+    const translationResult = await translateToEnglish(finalUserText);
+    finalUserText = translationResult.translated;
+    if (translationResult.originalLang !== 'en' && translationResult.originalLang !== 'unknown') {
+      finalContext += ` [Original Input Language: ${translationResult.originalLang}]`;
+    }
+  }
+
+  if (finalContext) {
+    const geoEnrichment = await enrichLocationData(finalContext);
+    if (geoEnrichment) {
+      finalContext += `\n${geoEnrichment}`;
+    }
+  }
+
   // Build a combined prompt string for all domain agents.
   // NOTE: mockContext is intentionally not logged to avoid capturing sensor PII.
   const userPrompt = [
-    text ? `User Input: ${text}` : null,
-    mockContext ? `Context/Sensor Data: ${mockContext}` : null,
+    finalUserText ? `User Input: ${finalUserText}` : null,
+    finalContext ? `Context/Sensor Data: ${finalContext}` : null,
   ]
     .filter(Boolean)
     .join('\n');
@@ -268,7 +307,10 @@ export async function POST(req: Request): Promise<Response> {
         `status=${verification.status}`
     );
 
-    // ── Phase 3: Compose and return unified response ───────────────────────────
+    // ── Phase 4: Text To Speech (TTS) ──────────────────────────────────────────
+    const audio_summary = await generateAudioSummary(verification.human_readable_summary) ?? undefined;
+
+    // ── Phase 5: Compose and return unified response ───────────────────────────
     const multiAgentResponse: MultiAgentResponse = {
       intent: verification.intent,
       urgency_level: verification.urgency_level,
@@ -282,6 +324,7 @@ export async function POST(req: Request): Promise<Response> {
       simulation: verification.simulation ?? [],
       explanation: verification.explanation,
       human_readable_summary: verification.human_readable_summary,
+      audio_summary,
     };
 
     if (db) {
@@ -290,6 +333,7 @@ export async function POST(req: Request): Promise<Response> {
           intent: verification.intent || 'unknown',
           urgency: verification.urgency_level || 'unknown',
           status: verification.status || 'unknown',
+          uid: authUid,
           timestamp: new Date().toISOString(),
           // Avoiding storing original PII like text/image
         });
