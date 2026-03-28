@@ -31,6 +31,8 @@ import {
   type VerificationAgentOutput,
   type MultiAgentResponse,
 } from './agents';
+import { db } from '../../../lib/firebase-admin';
+
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -281,6 +283,21 @@ export async function POST(req: Request): Promise<Response> {
       explanation: verification.explanation,
       human_readable_summary: verification.human_readable_summary,
     };
+
+    if (db) {
+      try {
+        await db.collection('bridge_evaluations').add({
+          intent: verification.intent || 'unknown',
+          urgency: verification.urgency_level || 'unknown',
+          status: verification.status || 'unknown',
+          timestamp: new Date().toISOString(),
+          // Avoiding storing original PII like text/image
+        });
+        console.info('[Bridge API] Saved evaluation result to Google Cloud Firestore.');
+      } catch (dbError) {
+        console.error('[Bridge API] Firestore save error (Google Cloud setup may be incomplete):', dbError);
+      }
+    }
 
     console.info('[Bridge API] Pipeline complete. Returning unified response.');
     return Response.json(multiAgentResponse);
