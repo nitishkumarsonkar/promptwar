@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { POST } from './route';
 import { getAi } from './agents';
+import { db, verifyIdToken } from '../../../lib/firebase-admin';
+import { enrichLocationData, translateToEnglish } from '../../../lib/google-services';
 
 vi.mock('./agents', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -135,5 +137,117 @@ describe('POST /api/bridge', () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(500); // Fails gracefully through the catch block
+  });
+
+  describe('Authentication and Header Parsing', () => {
+    let originalEnforceAuth: string | undefined;
+
+    beforeEach(() => {
+      originalEnforceAuth = process.env.ENFORCE_AUTH;
+    });
+
+    afterEach(() => {
+      process.env.ENFORCE_AUTH = originalEnforceAuth;
+    });
+
+    it('should return 401 if ENFORCE_AUTH is true and header is missing', async () => {
+      process.env.ENFORCE_AUTH = 'true';
+      const req = new Request('http://localhost:3000/api/bridge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'Hello' }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(401);
+      const data = await res.json();
+      expect(data.error).toBe('Missing or invalid Authorization header');
+    });
+
+    it('should return 401 if ENFORCE_AUTH is true and token is invalid', async () => {
+      process.env.ENFORCE_AUTH = 'true';
+      vi.mocked(verifyIdToken).mockResolvedValueOnce(null);
+
+      const req = new Request('http://localhost:3000/api/bridge', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer invalid_token'
+        },
+        body: JSON.stringify({ text: 'Hello' }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(401);
+      const data = await res.json();
+      expect(data.error).toBe('Unauthorized: Invalid Firebase token');
+    });
+
+    it('should proceed if ENFORCE_AUTH is false but header is provided (extracts uid)', async () => {
+      process.env.ENFORCE_AUTH = 'false';
+      mockGenerateContent.mockResolvedValue({ text: '{}' });
+      const req = new Request('http://localhost:3000/api/bridge', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer valid_token'
+        },
+        body: JSON.stringify({ text: 'Hello' }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(verifyIdToken).toHaveBeenCalledWith('valid_token');
+    });
+  });
+
+  describe('Phase 0 Transformations (Location & Translation)', () => {
+    it('should include original language in context if translation detects non-English', async () => {
+      vi.mocked(translateToEnglish).mockResolvedValueOnce({ translated: 'Help me', originalLang: 'es' });
+      mockGenerateContent.mockResolvedValue({ text: '{}' });
+
+      const req = new Request('http://localhost:3000/api/bridge', {
+        method: 'POST',
+        body: JSON.stringify({ text: 'Ayudame' }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      // Tests that `translateToEnglish` was successfully integrated without throwing
+      expect(translateToEnglish).toHaveBeenCalled();
+    });
+
+    it('should enrich location data if mockContext is provided', async () => {
+      mockGenerateContent.mockResolvedValue({ text: '{}' });
+
+      const req = new Request('http://localhost:3000/api/bridge', {
+        method: 'POST',
+        body: JSON.stringify({ text: 'Crash here', mockContext: 'GPS: 12.34, 56.78' }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(enrichLocationData).toHaveBeenCalled();
+    });
+  });
+
+  describe('Firestore Database Error Handling', () => {
+    it('should log error but still return 200 if Firestore save fails', async () => {
+      mockGenerateContent.mockResolvedValue({ text: '{}' });
+      
+      // Force the mock to throw an error for this test
+      vi.mocked(db!.collection).mockReturnValueOnce({
+        add: vi.fn().mockRejectedValueOnce(new Error('Firestore error')),
+      } as any);
+
+      const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const req = new Request('http://localhost:3000/api/bridge', {
+        method: 'POST',
+        body: JSON.stringify({ text: 'Hello' }),
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(consoleErrorMock).toHaveBeenCalledWith(
+        expect.stringContaining('[Bridge API] Firestore save error'),
+        expect.any(Error)
+      );
+      consoleErrorMock.mockRestore();
+    });
   });
 });

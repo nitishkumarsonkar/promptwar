@@ -23,6 +23,10 @@ describe('agents helper functions', () => {
       process.env.GEMINI_API_KEY = 'mock_api_key';
       const ai = getAi();
       expect(ai).toBeDefined();
+      
+      // Call it a second time to cover the caching branch
+      const ai2 = getAi();
+      expect(ai2).toBe(ai);
     });
   });
 
