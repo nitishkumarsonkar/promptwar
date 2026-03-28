@@ -16,29 +16,24 @@ import { GoogleGenAI, type Part } from '@google/genai';
 // Runtime environment validation
 // ---------------------------------------------------------------------------
 
-/**
- * Validates that the Gemini API key is present at module load time.
- * Throws at startup rather than at request time to surface misconfigurations early.
- */
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error(
-    '[Bridge/agents] GEMINI_API_KEY environment variable is not set. ' +
-      'Copy .env.example to .env and supply a valid key.'
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Shared Gemini client
 // ---------------------------------------------------------------------------
 
-/**
- * Singleton GoogleGenAI client shared across all agent call-sites.
- * Initialised once at module load; the API key is sourced exclusively from
- * the server-side environment and never exposed to the browser.
- */
-export const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY as string,
-});
+let _aiInstance: GoogleGenAI | null = null;
+
+export const getAi = () => {
+  if (!_aiInstance) {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error(
+        '[Bridge/agents] GEMINI_API_KEY environment variable is not set. ' +
+          'Copy .env.example to .env and supply a valid key.'
+      );
+    }
+    _aiInstance = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+  }
+  return _aiInstance;
+};
 
 // ---------------------------------------------------------------------------
 // Model identifiers

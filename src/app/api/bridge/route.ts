@@ -15,7 +15,7 @@
  */
 
 import {
-  ai,
+  getAi,
   FLASH_MODEL,
   PRO_MODEL,
   buildContents,
@@ -89,7 +89,7 @@ async function callDomainAgent<T>(
   imageDataUrl?: string
 ): Promise<T> {
   const parts = buildContents(userText, imageDataUrl);
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: FLASH_MODEL,
     contents: parts,
     config: {
@@ -130,7 +130,7 @@ async function callVerificationAgent(
   const userPrompt = `Original user input: "${userText || '(no text — image/context only)'}"`;
   const parts = buildContents(userPrompt, imageDataUrl);
 
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: PRO_MODEL,
     contents: parts,
     config: {
